@@ -9,9 +9,9 @@ Parameter | Description | Default
 `ui.database.name` | MYSQL Database name | `manticore_kafka_ui`
 `ui.database.name` | MYSQL user name | `ms`
 `ui.database.secret` | MYSQL user password | `mysqlSecret`
-`ui.image.repository` | UI image url | `ghcr.io/manticoresoftware/streams/ui`
+`ui.image.repository` | UI image url | `ghcr.io/ivinco/manticore-streams/ui`
 `ui.image.imagePullPolicy` | UI image pull policy. Switch to `Always` if you need to pull new image each pos restart | `IfNotPresent`
-`ui.nginx.image.repository` | Nginx sidecar image url. Must contain UI public assets; the old `nginxinc/nginx-unprivileged` image is not supported | `ghcr.io/manticoresoftware/streams/ui-nginx`
+`ui.nginx.image.repository` | Nginx sidecar image url. Must contain UI public assets; the old `nginxinc/nginx-unprivileged` image is not supported | `ghcr.io/ivinco/manticore-streams/ui-nginx`
 `ui.nginx.image.tag` | Nginx sidecar image tag. Defaults to chart app version when omitted | ``
 `ui.nginx.image.imagePullPolicy` | Nginx sidecar image pull policy | `IfNotPresent`
 `ui.migrationWait.maxAttempts` | Maximum UI init-container checks while waiting for migrations to complete | `120`
@@ -38,7 +38,7 @@ Parameter | Description | Default
 ### Scaler section
 Parameter | Description | Default
 --------- | ----------- | -------
-`scaler.image.repository` | Scaler image url | `ghcr.io/manticoresoftware/streams/scaler`
+`scaler.image.repository` | Scaler image url | `ghcr.io/ivinco/manticore-streams/scaler`
 `scaler.image.imagePullPolicy` | Scaler image pull policy | `IfNotPresent`
 `scaler.service.port` | Scaler service port | `80`
 `scaler.service.targetPort` | Scaler service target port | `8080`
@@ -60,7 +60,7 @@ Parameter | Description | Default
 ### Worker section
 Parameter | Description | Default
 --------- | ----------- | -------
-`worker.image.repository` | Worker image url | `ghcr.io/manticoresoftware/streams/worker`
+`worker.image.repository` | Worker image url | `ghcr.io/ivinco/manticore-streams/worker`
 `worker.image.imagePullPolicy` | Worker image pull policy | `IfNotPresent`
 `worker.processedMeasureTime` | Value in seconds for measuring processing. Allow to change pipieline scaling sensitivity. Less value - more quick, better - slowly  | `60`
 `worker.maxQueryProcessingTime` | Value in seconds for measuring max query processing time. Allow to change pipieline scaling sensitivity. Less value - more quick, better - slowly  | `10`
@@ -72,7 +72,7 @@ Parameter | Description | Default
 ### Manticore section
 Parameter | Description | Default
 --------- | ----------- | -------
-`manticore.image.repository` | Manticore image url | `ghcr.io/manticoresoftware/streams/manticore`
+`manticore.image.repository` | Manticore image url | `ghcr.io/ivinco/manticore-streams/manticore`
 `manticore.image.imagePullPolicy` | Manticore image pull policy | `IfNotPresent`
 `manticore.service.port` | Manticore service port | `9306`
 `manticore.volumeClaimTemplates.size` | Size for Manticore volume | `1Gi`
@@ -82,7 +82,7 @@ Parameter | Description | Default
 ### Rules checker section
 Parameter | Description | Default
 --------- | ----------- | -------
-`rulesChecker.image.repository` | Rules checker image url | `ghcr.io/manticoresoftware/streams/rules_checker`
+`rulesChecker.image.repository` | Rules checker image url | `ghcr.io/ivinco/manticore-streams/rules_checker`
 `rulesChecker.image.imagePullPolicy` | Rules checker image pull policy | `IfNotPresent`
 `rulesChecker.service.port` | Rules checker service port | `80`
 `rulesChecker.service.targetPort` | Rules checker service target port | `8080`

@@ -185,7 +185,7 @@ build_images() (
 
   for component in "${components[@]}"; do
     docker image inspect "streams/${component}:ci" >/dev/null
-    docker tag "streams/${component}:ci" "ghcr.io/manticoresoftware/streams/${component}:${tag}"
+    docker tag "streams/${component}:ci" "ghcr.io/ivinco/manticore-streams/${component}:${tag}"
   done
 )
 
@@ -193,7 +193,7 @@ import_images() {
   local tag component
   tag=$(version)
   for component in "${components[@]}"; do
-    local_image="ghcr.io/manticoresoftware/streams/${component}:${tag}"
+    local_image="ghcr.io/ivinco/manticore-streams/${component}:${tag}"
     docker image inspect "$local_image" >/dev/null || die "image was not built: $local_image"
     k3d image import --cluster "$CLUSTER_NAME" "$local_image"
   done

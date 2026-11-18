@@ -16,7 +16,7 @@ return [
         'maxBatchSize'         => 5000,
         'processedMeasureTime' => 60,
         'image'                => [
-            'repository' => 'ghcr.io/manticoresoftware/streams/worker',
+            'repository' => 'ghcr.io/ivinco/manticore-streams/worker',
             'tag'        => '0.0.1',
         ],
 
@@ -46,7 +46,7 @@ return [
         'exposePort'           => 32080,
         'userId'               => 999,
         'image'                => [
-            'repository' => 'ghcr.io/manticoresoftware/streams/manticore',
+            'repository' => 'ghcr.io/ivinco/manticore-streams/manticore',
             'tag'        => '0.0.1',
         ],
         'searchd'              => [
@@ -71,7 +71,7 @@ return [
         'enabled'           => false,
         'maxMatchedPercent' => 30,
         'image'             => [
-            'repository' => 'ghcr.io/manticoresoftware/streams/rules_checker',
+            'repository' => 'ghcr.io/ivinco/manticore-streams/rules_checker',
             'tag'        => '0.0.1',
         ],
         'service'           => [

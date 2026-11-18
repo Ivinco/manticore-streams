@@ -21,7 +21,7 @@
         "loglevel": "WARN",
         "skipExceededMessages": true,
         "image": {
-            "repository": "ghcr.io/manticoresoftware/streams/worker",
+            "repository": "ghcr.io/ivinco/manticore-streams/worker",
             "tag": "dev",
             "imagePullPolicy": "IfNotPresent"
         },
@@ -54,7 +54,7 @@
         "exposePort": null,
         "userId": 999,
         "image": {
-            "repository": "ghcr.io/manticoresoftware/streams/manticore",
+            "repository": "ghcr.io/ivinco/manticore-streams/manticore",
             "tag": "dev",
             "imagePullPolicy": "IfNotPresent"
         },
@@ -102,7 +102,7 @@
         "enabled": false,
         "maxMatchedPercent": null,
         "image": {
-            "repository": "ghcr.io/manticoresoftware/streams/rules_checker",
+            "repository": "ghcr.io/ivinco/manticore-streams/rules_checker",
             "tag": "dev",
             "imagePullPolicy": "IfNotPresent"
         },
