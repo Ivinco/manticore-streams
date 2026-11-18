@@ -436,6 +436,11 @@ podSecurityPolicy:
   enabled: false
   annotations: {}
 
+# Image pull secrets attached to the ui-admin-sa ServiceAccount, which every pod of the
+# release uses (including the pipeline StatefulSets the UI creates), e.g.
+# [{name: ghcr-ivinco}] for private GHCR packages.
+imagePullSecrets: []
+
 nameOverride: ""
 fullnameOverride: ""
 
