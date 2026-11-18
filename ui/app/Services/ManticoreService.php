@@ -613,6 +613,12 @@ class ManticoreService extends BaseManticoreService
         foreach ($rules as $rule) {
             if ($newRule->getQuery() !== '') {
                 $rule->setQuery($newRule->getQuery());
+
+                $error = $this->rewriteUrlFields($rule);
+                if ($error !== null) {
+                    $this->setStatusCode(Response::HTTP_UNPROCESSABLE_ENTITY);
+                    return ['message' => $error];
+                }
             }
 
             if ($newRule->getFilters() !== '') {
@@ -695,112 +701,10 @@ class ManticoreService extends BaseManticoreService
         $rule->getTags()->setInserted($nowDate);
         $rule->getTags()->setUpdated($nowDate);
 
-        if ($this->urlFields === null) {
-            $this->getFields();
-        }
-
-        $modified = false;
-        $fields = $this->getFields();
-        $fieldNames = [];
-        foreach ($fields as $field) {
-            $fieldNames[] = '[\s|^]+@' . $field['Field'];
-        }
-
-        $fieldNames[] = "[\s|^]+@\(";
-
-
-        $regex = '/((?!' . implode('|', $fieldNames) . ').)*/usi';
-        preg_match_all($regex, $rule->getQuery(), $matches);
-
-
-        if ($matches[0] === []) {
-            $explodedText[] = $rule->getQuery();
-        } else {
-            $explodedText = $matches[0];
-        }
-
-        foreach ($explodedText as $k => $v) {
-            if ($v === "") {
-                unset($explodedText[$k]);
-            }
-        }
-
-        if (!empty($this->urlFields)) {
-            foreach ($this->urlFields as $field => $v) {
-                if (strpos($rule->getQuery(), "@$field ") !== false
-                    || preg_match(
-                        '/@\(.*?' . $field . '.*?\) ([^\s]*)/usi',
-                        $rule->getQuery()
-                    )
-                ) {
-                    $modified = true;
-                    foreach ($explodedText as $k => $value) {
-                        if ($value === "") {
-                            continue;
-                        }
-
-                        if (trim($value[1]) === '('
-                            && preg_match_all(
-                                '/\(.*?' . $field . '.*?\) (.*)/usi',
-                                $value,
-                                $matches
-                            )
-                        ) {
-                            preg_match('/\((.*?' . $field . '.*?)\)/', $value,
-                                $offsetMatches, PREG_OFFSET_CAPTURE);
-                            $matchStart = $offsetMatches[0][1];
-                            $matchEnd = $offsetMatches[0][1]
-                                + strlen($offsetMatches[0][0]);
-                            $foundMatch = substr($value, $matchStart + 1,
-                                $matchEnd - 3);
-                            $replaced = explode(',', $foundMatch);
-
-
-                            $replaced = array_map(static function ($row) {
-                                return trim($row);
-                            }, $replaced);
-
-                            $result = '';
-                            foreach ($replaced as $fieldName) {
-                                $result .= ' ' . $this->urlizeQuery($fieldName,
-                                        $matches[1][0]);
-                            }
-                            $explodedText[$k] = $result;
-                            continue;
-                        }
-
-                        if (strpos($value, $field) === 1) {
-                            // если совпало название поля с самого начала
-                            $query = substr($value, mb_strlen($field) + 1);
-
-                            $urlized = $this->urlizeQuery($field, $query);
-                            if ($urlized !== '') {
-                                $explodedText[$k] = $urlized;
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-
-        if ($modified) {
-            foreach ($explodedText as $k => $value) {
-                $value = trim($value);
-                if ($value === "") {
-                    unset($explodedText[$k]);
-                    continue;
-                }
-                if ($k > 0 && $value[0] !== '@' && $value[0] !== '('
-                    && $value[0] !== '-'
-                ) {
-                    $explodedText[$k] = '@' . $value;
-                }
-            }
-
-            $rule->getTags()
-                ->setOriginalQuery($this->toLowerExcludeOperators(trim($rule->getQuery())));
-            $rule->setQuery(implode(" ", $explodedText));
+        $error = $this->rewriteUrlFields($rule);
+        if ($error !== null) {
+            $this->setStatusCode(Response::HTTP_UNPROCESSABLE_ENTITY);
+            return ['message' => $error];
         }
 
         $rule->decodeEscaping();
@@ -1134,6 +1038,149 @@ class ManticoreService extends BaseManticoreService
         return ['status' => CurlService::STATUS_ERROR, 'message' => $result['result']['message'], 'result' => $result];
     }
 
+
+    /**
+     * Rewrite every url-type field clause of the rule ("@url host",
+     * "@(title,url) host", "@url a.com | b.com -c.com") into the hashed
+     * @<field>_host_path / _query / _anchor tokens that the percolate table
+     * indexes. The table has no plain "url" full-text field, so a rule stored
+     * with the clause unrewritten is rejected by Manticore with
+     * "no field 'url' found in schema". Both addRule() and update() go
+     * through here so that INSERT and REPLACE store the same form.
+     *
+     * The original query is kept in the rule tags (originalQuery) when a
+     * rewrite happened.
+     *
+     * @return string|null an error message when the query could not be
+     *                     parsed, null when the rule is ready to store
+     */
+    private function rewriteUrlFields(Rule $rule): ?string
+    {
+        if ($this->urlFields === null) {
+            $this->getFields();
+        }
+
+        $modified = false;
+        $fields = $this->getFields();
+        $fieldNames = [];
+        foreach ($fields as $field) {
+            $fieldNames[] = preg_quote($field['Field'], '/');
+        }
+
+        $fieldNames[] = '\(';
+
+        $explodedText = self::splitQueryByFieldMarkers($rule->getQuery(), $fieldNames);
+        if ($explodedText === null) {
+            return 'Unable to parse query: ' . preg_last_error_msg();
+        }
+
+        if (!empty($this->urlFields)) {
+            foreach ($this->urlFields as $field => $v) {
+                if (strpos($rule->getQuery(), "@$field ") !== false
+                    || preg_match(
+                        '/@\(.*?' . $field . '.*?\) ([^\s]*)/usi',
+                        $rule->getQuery()
+                    )
+                ) {
+                    $modified = true;
+                    foreach ($explodedText as $k => $value) {
+                        if ($value === "") {
+                            continue;
+                        }
+
+                        if (trim($value[1]) === '('
+                            && preg_match_all(
+                                '/\(.*?' . $field . '.*?\) (.*)/usi',
+                                $value,
+                                $matches
+                            )
+                        ) {
+                            preg_match('/\((.*?' . $field . '.*?)\)/', $value,
+                                $offsetMatches, PREG_OFFSET_CAPTURE);
+                            $matchStart = $offsetMatches[0][1];
+                            $matchEnd = $offsetMatches[0][1]
+                                + strlen($offsetMatches[0][0]);
+                            $foundMatch = substr($value, $matchStart + 1,
+                                $matchEnd - 3);
+                            $replaced = explode(',', $foundMatch);
+
+
+                            $replaced = array_map(static function ($row) {
+                                return trim($row);
+                            }, $replaced);
+
+                            $result = '';
+                            foreach ($replaced as $fieldName) {
+                                $result .= ' ' . $this->urlizeQuery($fieldName,
+                                        $matches[1][0]);
+                            }
+                            $explodedText[$k] = $result;
+                            continue;
+                        }
+
+                        if (strpos($value, $field) === 1) {
+                            // если совпало название поля с самого начала
+                            $query = substr($value, mb_strlen($field) + 1);
+
+                            $urlized = $this->urlizeQuery($field, $query);
+                            if ($urlized !== '') {
+                                $explodedText[$k] = $urlized;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+
+        if ($modified) {
+            foreach ($explodedText as $k => $value) {
+                $value = trim($value);
+                if ($value === "") {
+                    unset($explodedText[$k]);
+                    continue;
+                }
+                if ($k > 0 && $value[0] !== '@' && $value[0] !== '('
+                    && $value[0] !== '-'
+                ) {
+                    $explodedText[$k] = '@' . $value;
+                }
+            }
+
+            $rule->getTags()
+                ->setOriginalQuery($this->toLowerExcludeOperators(trim($rule->getQuery())));
+            $rule->setQuery(implode(" ", $explodedText));
+        }
+
+        return null;
+    }
+
+    /**
+     * Split a rule query into chunks that start at a field marker ("@field"
+     * or "@(" preceded by whitespace), the first chunk being whatever comes
+     * before the first marker. Empty chunks are dropped.
+     *
+     * A lookahead split runs in linear time. The previous implementation,
+     * a preg_match_all() over the pattern ((?!<markers>).)* with the "usi"
+     * modifiers, scanned the query character by character inside a capturing
+     * group and exhausted the PCRE JIT stack
+     * (PREG_JIT_STACKLIMIT_ERROR) on queries longer than about 8 KB; the
+     * failure was not checked, so the "@url" rewrite below was silently
+     * skipped and Manticore rejected the rule with
+     * "no field 'url' found in schema".
+     *
+     * @param string   $query
+     * @param string[] $fieldNames preg_quote()d field names, plus '\(' for "@("
+     *
+     * @return string[]|null null when preg_split() fails (see preg_last_error_msg())
+     */
+    public static function splitQueryByFieldMarkers(string $query, array $fieldNames): ?array
+    {
+        $regex = '/[\s|^]+(?=@(?:' . implode('|', $fieldNames) . '))/ui';
+        $parts = preg_split($regex, $query, -1, PREG_SPLIT_NO_EMPTY);
+
+        return $parts === false ? null : $parts;
+    }
 
     private function urlize($fieldName, $in): string
     {
