@@ -9,7 +9,7 @@ ui:
     user: ms
     secret: mysqlSecret
   image:
-    repository: ghcr.io/manticoresoftware/streams/ui
+    repository: ghcr.io/ivinco/manticore-streams/ui
     imagePullPolicy: IfNotPresent
   #    tag: 0.0.1
   service:
@@ -69,7 +69,7 @@ ui:
     max_requests: 10000
   nginx:
     image:
-      repository: ghcr.io/manticoresoftware/streams/ui-nginx
+      repository: ghcr.io/ivinco/manticore-streams/ui-nginx
       imagePullPolicy: IfNotPresent
 #      tag: 0.0.1
     resources:
@@ -180,7 +180,7 @@ mysql:
 scaler:
   php:
     image:
-      repository: ghcr.io/manticoresoftware/streams/scaler
+      repository: ghcr.io/ivinco/manticore-streams/scaler
       imagePullPolicy: IfNotPresent
 #      tag: 0.0.1
     resources:
@@ -297,7 +297,7 @@ columnar:
 
 worker:
   image:
-    repository: ghcr.io/manticoresoftware/streams/worker
+    repository: ghcr.io/ivinco/manticore-streams/worker
     imagePullPolicy: IfNotPresent
   #    tag: 0.0.1
   processedMeasureTime: 60
@@ -340,7 +340,7 @@ worker:
 
 manticore:
   image:
-    repository: ghcr.io/manticoresoftware/streams/manticore
+    repository: ghcr.io/ivinco/manticore-streams/manticore
     imagePullPolicy: IfNotPresent
   #    tag: 0.0.1
   service:
@@ -378,7 +378,7 @@ manticore:
 
 rulesChecker:
   image:
-    repository: ghcr.io/manticoresoftware/streams/rules_checker
+    repository: ghcr.io/ivinco/manticore-streams/rules_checker
     imagePullPolicy: IfNotPresent
   #    tag: 0.0.1
   service:

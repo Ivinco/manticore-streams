@@ -8,7 +8,7 @@ Manticore Streams is a Kubernetes application for filtering Apache Kafka topics 
 - Helm 3
 - An Apache Kafka cluster reachable from the Kubernetes workloads
 
-The release chart uses public images from `ghcr.io/manticoresoftware/streams`; no image-pull secret is required.
+The release chart uses public images from `ghcr.io/ivinco/manticore-streams`; no image-pull secret is required.
 
 ## Install
 

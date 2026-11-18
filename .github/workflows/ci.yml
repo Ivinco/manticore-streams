@@ -318,7 +318,7 @@ jobs:
           components=(manticore scaler rules_checker worker ui ui-nginx)
           for component in "${components[@]}"; do
             docker image inspect "streams/${component}:ci" >/dev/null
-            image="ghcr.io/manticoresoftware/streams/${component}:${IMAGE_TAG}"
+            image="ghcr.io/ivinco/manticore-streams/${component}:${IMAGE_TAG}"
             docker tag "streams/${component}:ci" "$image"
             docker push "$image"
           done

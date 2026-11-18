@@ -148,7 +148,7 @@ spec:
           {{- toYaml .Values.ui.resources | nindent 10 }}
       - name: {{ .Chart.Name }}-nginx
         {{- if eq .Values.ui.nginx.image.repository "nginxinc/nginx-unprivileged" }}
-        {{- fail "ui.nginx.image.repository=nginxinc/nginx-unprivileged is no longer supported because the nginx image must include UI public assets. Set ui.nginx.image.repository to ghcr.io/manticoresoftware/streams/ui-nginx or reset reused Helm values." }}
+        {{- fail "ui.nginx.image.repository=nginxinc/nginx-unprivileged is no longer supported because the nginx image must include UI public assets. Set ui.nginx.image.repository to ghcr.io/ivinco/manticore-streams/ui-nginx or reset reused Helm values." }}
         {{- end }}
         image: {{ .Values.ui.nginx.image.repository }}:{{ .Values.ui.nginx.image.tag | default .Chart.AppVersion}}
         imagePullPolicy: {{ .Values.ui.nginx.image.imagePullPolicy }}

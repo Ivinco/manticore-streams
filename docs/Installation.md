@@ -11,7 +11,7 @@ Manticore Streams consumes Apache Kafka topics. Before installing it, make sure 
 
 ## Download the chart
 
-Download the `streams-<version>.tgz` asset for the desired version from [GitHub Releases](https://github.com/manticoresoftware/streams/releases). The package contains matching chart and image versions. Images are public at `ghcr.io/manticoresoftware/streams`, so no image-pull secret is required.
+Download the `streams-<version>.tgz` asset for the desired version from [GitHub Releases](https://github.com/manticoresoftware/streams/releases). The package contains matching chart and image versions. Images are public at `ghcr.io/ivinco/manticore-streams`, so no image-pull secret is required.
 
 ## Install with Helm
 
