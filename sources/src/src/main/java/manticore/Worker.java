@@ -57,6 +57,7 @@ public class Worker {
         this.instanceLabel = String.valueOf(getCurrentTimeMillis());
         this.manticoreConnector = manticoreConnector;
         this.consumer = consumer;
+        this.consumer.trackOffsets(this.currentOffsets);
         this.admin = admin;
         this.manticoreBatch = manticoreBatch;
         this.manualGarbageCleaner = manualGarbageCleaner;

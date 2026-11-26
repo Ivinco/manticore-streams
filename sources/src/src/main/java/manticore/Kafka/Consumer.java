@@ -22,6 +22,11 @@ public class Consumer {
 
     private int failedCommitCount = 0;
 
+    // The worker's offset map (partition -> next offset to consume). Entries for partitions
+    // revoked from this consumer must be dropped: otherwise the worker keeps committing the
+    // last offset it saw for them, overwriting the new owner's commits with a stale value.
+    private Map<TopicPartition, OffsetAndMetadata> trackedOffsets;
+
     public Consumer(KafkaConsumer<String, String> consumer) {
         this.consumer = consumer;
         this.topics = new ArrayList<>();
@@ -55,6 +60,7 @@ public class Consumer {
             public void onPartitionsRevoked(Collection<TopicPartition> collection) {
                 rebalancingState = true;
                 lastRebalancing = System.currentTimeMillis();
+                forgetPartitions(collection);
                 Worker.getLogger().info("[KafkaConsumer] Revoked partitions {} for topics {}", collection, topics);
             }
 
@@ -96,10 +102,43 @@ public class Consumer {
         }
     }
 
+    public void trackOffsets(Map<TopicPartition, OffsetAndMetadata> offsets) {
+        synchronized (this) {
+            this.trackedOffsets = offsets;
+        }
+    }
+
+    // Called from the rebalance listener, i.e. inside poll(), with this object's lock held.
+    protected void forgetPartitions(Collection<TopicPartition> partitions) {
+        if (trackedOffsets != null && partitions != null && !partitions.isEmpty()) {
+            trackedOffsets.keySet().removeAll(partitions);
+        }
+    }
+
+    // Only commit offsets of partitions this consumer currently owns.
+    protected Map<TopicPartition, OffsetAndMetadata> ownedOffsets(Map<TopicPartition, OffsetAndMetadata> offsets) {
+        Set<TopicPartition> assigned = this.consumer.assignment();
+        Map<TopicPartition, OffsetAndMetadata> owned = new HashMap<>();
+        for (Map.Entry<TopicPartition, OffsetAndMetadata> entry : offsets.entrySet()) {
+            if (assigned.contains(entry.getKey())) {
+                owned.put(entry.getKey(), entry.getValue());
+            }
+        }
+        if (owned.size() < offsets.size()) {
+            Worker.getLogger().debug("[KafkaConsumer] Skipping commit for {} partition(s) not assigned to this consumer",
+                    offsets.size() - owned.size());
+        }
+        return owned;
+    }
+
     public void commitSync(Map<TopicPartition, OffsetAndMetadata> currentOffsets) {
         synchronized (this) {
+            Map<TopicPartition, OffsetAndMetadata> owned = ownedOffsets(currentOffsets);
+            if (owned.isEmpty()) {
+                return;
+            }
             try {
-                this.consumer.commitSync(currentOffsets, Duration.ofMillis(5000L));
+                this.consumer.commitSync(owned, Duration.ofMillis(5000L));
                 failedCommitCount = 0;
                 Worker.getLogger().debug("[KafkaConsumer] Successfully committed offsets for topics");
             } catch (TimeoutException exception) {
@@ -117,7 +156,11 @@ public class Consumer {
 
     public void commitAsync(Map<TopicPartition, OffsetAndMetadata> currentOffsets) {
         synchronized (this) {
-            this.consumer.commitAsync(currentOffsets, null);
+            Map<TopicPartition, OffsetAndMetadata> owned = ownedOffsets(currentOffsets);
+            if (owned.isEmpty()) {
+                return;
+            }
+            this.consumer.commitAsync(owned, null);
         }
     }
 
