@@ -97,7 +97,7 @@ class ConsumerTest {
     void testCommitSync_WithOffsets_Success() {
         Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
         offsets.put(new TopicPartition("test-topic", 0), new OffsetAndMetadata(10L));
-        when(mockKafkaConsumer.assignment()).thenReturn(Set.of(new TopicPartition("test-topic", 0)));
+        when(mockKafkaConsumer.assignment()).thenReturn(offsets.keySet());
         consumer.commitSync(offsets);
         verify(mockKafkaConsumer).commitSync(offsets, Duration.ofMillis(5000L));
     }
@@ -106,7 +106,7 @@ class ConsumerTest {
     void testCommitSync_WithRetries() {
         Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
         offsets.put(new TopicPartition("test-topic", 0), new OffsetAndMetadata(10L));
-        when(mockKafkaConsumer.assignment()).thenReturn(Set.of(new TopicPartition("test-topic", 0)));
+        when(mockKafkaConsumer.assignment()).thenReturn(offsets.keySet());
 
         doThrow(new TimeoutException("Commit timeout"))
                 .doNothing()
@@ -121,7 +121,7 @@ class ConsumerTest {
     void testCommitSync_ExceedsRetryLimit() {
         Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
         offsets.put(new TopicPartition("test-topic", 0), new OffsetAndMetadata(10L));
-        when(mockKafkaConsumer.assignment()).thenReturn(Set.of(new TopicPartition("test-topic", 0)));
+        when(mockKafkaConsumer.assignment()).thenReturn(offsets.keySet());
 
         // Simulate continuous TimeoutException for more than 10 retries
         doThrow(new TimeoutException("Commit timeout"))
@@ -145,11 +145,50 @@ class ConsumerTest {
     void testCommitAsync() {
         Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
         offsets.put(new TopicPartition("test-topic", 0), new OffsetAndMetadata(10L));
-        when(mockKafkaConsumer.assignment()).thenReturn(Set.of(new TopicPartition("test-topic", 0)));
+        when(mockKafkaConsumer.assignment()).thenReturn(offsets.keySet());
 
         consumer.commitAsync(offsets);
 
         verify(mockKafkaConsumer).commitAsync(offsets, null);
+    }
+
+    @Test
+    void testCommitSyncSkipsUnassignedPartitions() {
+        TopicPartition owned = new TopicPartition("test-topic", 0);
+        TopicPartition revoked = new TopicPartition("test-topic", 1);
+        Map<TopicPartition, OffsetAndMetadata> offsets = Map.of(
+                owned, new OffsetAndMetadata(20L), revoked, new OffsetAndMetadata(10L));
+        when(mockKafkaConsumer.assignment()).thenReturn(Set.of(owned));
+
+        consumer.commitSync(offsets);
+
+        verify(mockKafkaConsumer).commitSync(Map.of(owned, offsets.get(owned)), Duration.ofMillis(5000L));
+    }
+
+    @Test
+    void testCommitAsyncSkipsUnassignedPartitions() {
+        TopicPartition owned = new TopicPartition("test-topic", 0);
+        TopicPartition revoked = new TopicPartition("test-topic", 1);
+        Map<TopicPartition, OffsetAndMetadata> offsets = Map.of(
+                owned, new OffsetAndMetadata(20L), revoked, new OffsetAndMetadata(10L));
+        when(mockKafkaConsumer.assignment()).thenReturn(Set.of(owned));
+
+        consumer.commitAsync(offsets);
+
+        verify(mockKafkaConsumer).commitAsync(Map.of(owned, offsets.get(owned)), null);
+    }
+
+    @Test
+    void testDoesNotCommitWhenNoPartitionsAreAssigned() {
+        Map<TopicPartition, OffsetAndMetadata> offsets = Map.of(
+                new TopicPartition("test-topic", 1), new OffsetAndMetadata(10L));
+        when(mockKafkaConsumer.assignment()).thenReturn(Collections.emptySet());
+
+        consumer.commitSync(offsets);
+        consumer.commitAsync(offsets);
+
+        verify(mockKafkaConsumer, never()).commitSync(anyMap(), any(Duration.class));
+        verify(mockKafkaConsumer, never()).commitAsync(anyMap(), any());
     }
 
     @Test
@@ -182,44 +221,46 @@ class ConsumerTest {
     }
 
     @Test
-    void testCommitSync_SkipsPartitionsNotAssigned() {
-        TopicPartition owned = new TopicPartition("test-topic", 0);
-        TopicPartition stale = new TopicPartition("test-topic", 8);
-        Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
-        offsets.put(owned, new OffsetAndMetadata(10L));
-        offsets.put(stale, new OffsetAndMetadata(5L));
-        when(mockKafkaConsumer.assignment()).thenReturn(Set.of(owned));
+    void testRevokedAndLostPartitionsAreRemovedFromConsumerOffsets() {
+        TopicPartition revoked = new TopicPartition("test-topic", 0);
+        TopicPartition lost = new TopicPartition("test-topic", 1);
+        TopicPartition retained = new TopicPartition("test-topic", 2);
+        consumer.recordOffset(revoked, 10L);
+        consumer.recordOffset(lost, 20L);
+        consumer.recordOffset(retained, 30L);
+        consumer.subscribe(List.of("test-topic"));
 
-        consumer.commitSync(offsets);
+        ArgumentCaptor<ConsumerRebalanceListener> listener = ArgumentCaptor.forClass(ConsumerRebalanceListener.class);
+        verify(mockKafkaConsumer).subscribe(anyList(), listener.capture());
+        listener.getValue().onPartitionsRevoked(List.of(revoked));
+        listener.getValue().onPartitionsLost(List.of(lost));
 
-        verify(mockKafkaConsumer).commitSync(Map.of(owned, new OffsetAndMetadata(10L)), Duration.ofMillis(5000L));
+        assertEquals(Map.of(retained, new OffsetAndMetadata(30L, "no metadata")), consumer.getOffsets());
     }
 
     @Test
-    void testCommitSync_NothingAssigned_NoCommit() {
-        Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
-        offsets.put(new TopicPartition("test-topic", 8), new OffsetAndMetadata(5L));
-        when(mockKafkaConsumer.assignment()).thenReturn(Collections.emptySet());
+    void testReturnedPartitionCannotCommitItsOldOffset() {
+        TopicPartition partition = new TopicPartition("test-topic", 0);
+        consumer.recordOffset(partition, 10L);
+        consumer.subscribe(List.of("test-topic"));
+        ArgumentCaptor<ConsumerRebalanceListener> listener = ArgumentCaptor.forClass(ConsumerRebalanceListener.class);
+        verify(mockKafkaConsumer).subscribe(anyList(), listener.capture());
 
-        consumer.commitSync(offsets);
+        listener.getValue().onPartitionsRevoked(List.of(partition));
+        when(mockKafkaConsumer.assignment()).thenReturn(Set.of(partition));
+        consumer.commitRecordedOffsets();
 
+        assertTrue(consumer.getOffsets().isEmpty());
         verify(mockKafkaConsumer, never()).commitSync(anyMap(), any(Duration.class));
     }
 
     @Test
-    void testRevokedPartitionsAreDroppedFromTrackedOffsets() {
-        TopicPartition kept = new TopicPartition("test-topic", 0);
-        TopicPartition revoked = new TopicPartition("test-topic", 8);
-        Map<TopicPartition, OffsetAndMetadata> tracked = new HashMap<>();
-        tracked.put(kept, new OffsetAndMetadata(10L));
-        tracked.put(revoked, new OffsetAndMetadata(5L));
-        consumer.trackOffsets(tracked);
+    void testGetOffsetsReturnsSnapshot() {
+        TopicPartition partition = new TopicPartition("test-topic", 0);
+        consumer.recordOffset(partition, 10L);
 
-        ArgumentCaptor<ConsumerRebalanceListener> listener = ArgumentCaptor.forClass(ConsumerRebalanceListener.class);
-        consumer.subscribe(List.of("test-topic"));
-        verify(mockKafkaConsumer).subscribe(anyList(), listener.capture());
-        listener.getValue().onPartitionsRevoked(List.of(revoked));
+        consumer.getOffsets().clear();
 
-        assertEquals(Map.of(kept, new OffsetAndMetadata(10L)), tracked);
+        assertEquals(Map.of(partition, new OffsetAndMetadata(10L, "no metadata")), consumer.getOffsets());
     }
 }
